@@ -37,7 +37,7 @@ from IPython.display import Audio, display
 api_key = input("Enter Your_API_KEY")
 
 def GetWeather(city):
-
+    
     weather_url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
 
     response = requests.get(weather_url).json()
