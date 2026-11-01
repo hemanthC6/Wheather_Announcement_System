@@ -1,78 +1,105 @@
-!pip install requests SpeechRecognition gTTS pydub -q
-import requests
-import speech_recognition as sr
-from gtts import gTTS
-from IPython.display import Audio, display, Javascript
-from google.colab import output
-from pydub import AudioSegment
-import base64
-import io
-
-def speak(text):
-    tts = gTTS(text=text, lang="en")
-
-    audio_file = io.BytesIO()
-    tts.write_to_fp(audio_file)
-    audio_file.seek(0)
-
-    display(Audio(audio_file.read(), autoplay=True))
-  from gtts import gTTS
-from IPython.display import Audio, display
-
-def speak(text):
-
-    tts = gTTS(text=text, lang="en")
-
-    tts.save("speech.mp3")
-
-    display(Audio("speech.mp3", autoplay=True))
-
-text = input("Enter text: ")
-
-speak(text)
+!pip install streamlit requests SpeechRecognition gTTS pydub -q
+import streamlit as st
 import requests
 from gtts import gTTS
-from IPython.display import Audio, display
+from io import BytesIO
+from datetime import datetime, timezone
 
-api_key = input("Enter Your_API_KEY")
+st.set_page_config(
+    page_title="Weather Announcement System",
+    page_icon="🌦️"
+)
+
+st.title("🌦️ Weather Announcement System")
+st.write("Enter a city name to get the weather report.")
+
+# OpenWeatherMap API key
+api_key = st.secrets["OPENWEATHER_API_KEY"]
+
 
 def GetWeather(city):
-    
-    weather_url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
-
-    response = requests.get(weather_url).json()
-    print(response)
-
-    if response.get("cod") != 200:
-        return "Weather information not available for " + city
-
-    description = response["weather"][0]["description"]
-    temperature = response["main"]["temp"]
-    humidity = response["main"]["humidity"]
-    wind_speed = response["wind"]["speed"]
-    Sunrise = response["sys"]["sunrise"]
-    Sunset = response["sys"]["sunset"]
-    weather_text = (
-        f"\n\nWeather report for {city}.\n"
-        f"Description: {description}.\n"
-        f"Temperature: {temperature} degrees Celsius.\n"
-        f"Humidity: {humidity} percent.\n"
-        f"Wind speed: {wind_speed} meters per second.\n"
-        f"System: {response['sys']['country']}.\n"
-        f"Sunrise: {Sunrise}.\n"
-        f"Sunset: {Sunset}."
+    weather_url = (
+        "https://api.openweathermap.org/data/2.5/weather"
+        f"?q={city}&appid={api_key}&units=metric"
     )
 
-    return weather_text
-  
-city_input = input("Enter City Name: ")
+    response = requests.get(weather_url, timeout=15)
+    data = response.json()
 
-report = GetWeather(city_input)
+    if response.status_code != 200:
+        return None
 
-print(report)
+    description = data["weather"][0]["description"]
+    temperature = data["main"]["temp"]
+    humidity = data["main"]["humidity"]
+    wind_speed = data["wind"]["speed"]
+    country = data["sys"]["country"]
 
-tts = gTTS(text=report, lang="en")
+    sunrise = datetime.fromtimestamp(
+        data["sys"]["sunrise"], timezone.utc
+    ).strftime("%H:%M UTC")
 
-tts.save("weather_report.mp3")
+    sunset = datetime.fromtimestamp(
+        data["sys"]["sunset"], timezone.utc
+    ).strftime("%H:%M UTC")
 
-display(Audio("weather_report.mp3"))
+    report = (
+        f"Weather report for {city}, {country}. "
+        f"Description: {description}. "
+        f"Temperature: {temperature} degrees Celsius. "
+        f"Humidity: {humidity} percent. "
+        f"Wind speed: {wind_speed} meters per second. "
+        f"Sunrise: {sunrise}. Sunset: {sunset}."
+    )
+
+    return {
+        "description": description,
+        "temperature": temperature,
+        "humidity": humidity,
+        "wind_speed": wind_speed,
+        "country": country,
+        "sunrise": sunrise,
+        "sunset": sunset,
+        "report": report
+    }
+
+
+city = st.text_input("Enter City Name")
+
+if st.button("Get Weather"):
+    if city.strip():
+        try:
+            weather = GetWeather(city.strip())
+
+            if weather is None:
+                st.error("Weather information not available for this city.")
+            else:
+                st.subheader(f"Weather Report: {city}")
+
+                st.write("Description:", weather["description"])
+                st.metric(
+                    "Temperature",
+                    f'{weather["temperature"]} °C'
+                )
+                st.write("Humidity:", weather["humidity"], "%")
+                st.write("Wind Speed:", weather["wind_speed"], "m/s")
+                st.write("Country:", weather["country"])
+                st.write("Sunrise:", weather["sunrise"])
+                st.write("Sunset:", weather["sunset"])
+
+                st.subheader("Weather Announcement")
+                st.write(weather["report"])
+
+                # Convert weather report to speech
+                audio_file = BytesIO()
+                tts = gTTS(text=weather["report"], lang="en")
+                tts.write_to_fp(audio_file)
+                audio_file.seek(0)
+
+                st.audio(audio_file, format="audio/mp3")
+
+        except requests.exceptions.RequestException:
+            st.error("Unable to connect to the weather service.")
+
+    else:
+        st.warning("Please enter a city name.")
