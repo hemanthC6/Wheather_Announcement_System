@@ -1,4 +1,4 @@
-
+!pip install streamlit requests SpeechRecognition gTTS pydub -q
 import streamlit as st
 import requests
 from gtts import gTTS
